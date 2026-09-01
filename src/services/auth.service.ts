@@ -3,6 +3,7 @@ import { pool } from "../config/database.js";
 import {
   generateAccessToken,
   generateRefreshToken,
+  verifyRefreshToken,
 } from "../utils/jwt.js";
 import type {
   LoginInput,
@@ -99,5 +100,59 @@ export const loginUser = async ({
     user,
     accessToken,
     refreshToken,
+  };
+};
+export const refreshUserSession = async (refreshToken: string) => {
+  const payload = verifyRefreshToken(refreshToken);
+
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      email,
+      name,
+      image_url,
+      token_version,
+      created_at
+    FROM users
+    WHERE id = $1
+    `,
+    [payload.userId]
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error("INVALID_REFRESH_TOKEN");
+  }
+
+  const user = result.rows[0];
+
+  if (user.token_version !== payload.tokenVersion) {
+    throw new Error("INVALID_REFRESH_TOKEN");
+  }
+
+  const newTokenVersion = user.token_version + 1;
+
+  await pool.query(
+    `
+    UPDATE users
+    SET token_version = $1
+    WHERE id = $2
+    `,
+    [newTokenVersion, user.id]
+  );
+
+  const accessToken = generateAccessToken(user.id);
+
+  const newRefreshToken = generateRefreshToken(
+    user.id,
+    newTokenVersion
+  );
+
+  delete user.token_version;
+
+  return {
+    user,
+    accessToken,
+    refreshToken: newRefreshToken,
   };
 };

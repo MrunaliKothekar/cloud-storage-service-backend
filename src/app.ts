@@ -3,6 +3,8 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { env } from "./config/env.js";
 import authRoutes from "./routes/auth.routes.js";
+import passport from "./config/passport.js";
+import fileRoutes from "./routes/file.routes.js";
 
 const app = express();
 
@@ -17,15 +19,16 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+app.use(passport.initialize());
+
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     success: true,
     message: "Cloud Storage API is running",
   });
 });
-console.log("authRoutes:", authRoutes);
-console.log("authRoutes type:", typeof authRoutes);
 
 app.use("/api/auth", authRoutes);
+app.use("/api/files", fileRoutes);
 
 export default app;
