@@ -5,6 +5,7 @@ import { env } from "./config/env.js";
 import authRoutes from "./routes/auth.routes.js";
 import passport from "./config/passport.js";
 import fileRoutes from "./routes/file.routes.js";
+import folderRoutes from "./routes/folder.routes.js";
 
 const app = express();
 
@@ -30,5 +31,6 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/files", fileRoutes);
+app.use("/api/folders", folderRoutes);
 
 export default app;
