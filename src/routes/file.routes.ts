@@ -1,6 +1,5 @@
 import { Router } from "express";
-
-import { uploadFile } from "../controllers/file.controller.js";
+import { deleteFile, updateFile, uploadFile,getFiles ,initUpload,completeUpload,getUploadUrl} from "../controllers/file.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { uploadSingleFile } from "../middlewares/upload.middleware.js";
 
@@ -10,7 +9,19 @@ router.post(
   "/upload",
   requireAuth,
   uploadSingleFile,
-  uploadFile
+  uploadFile,
+
 );
+router.post(
+  "/upload-url",
+  requireAuth,
+  getUploadUrl
+);
+router.patch("/:id", requireAuth, updateFile);
+router.delete("/:id", requireAuth, deleteFile);
+router.get("/", requireAuth, getFiles);
+router.post("/init", requireAuth, initUpload);
+router.post("/complete", requireAuth, completeUpload);
 
 export default router;
+

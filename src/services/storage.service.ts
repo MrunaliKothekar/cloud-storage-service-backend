@@ -31,3 +31,31 @@ export const deleteFromStorage = async (
     throw error;
   }
 };
+
+export const createSignedDownloadUrl = async (
+  storageKey: string
+) => {
+  const { data, error } = await supabase.storage
+    .from(env.SUPABASE_STORAGE_BUCKET)
+    .createSignedUrl(storageKey, 60 * 5);
+
+  if (error) {
+    throw error;
+  }
+
+  return data.signedUrl;
+};
+
+export const createSignedUploadUrl = async (
+  storageKey: string
+) => {
+  const { data, error } = await supabase.storage
+    .from(env.SUPABASE_STORAGE_BUCKET)
+    .createSignedUploadUrl(storageKey);
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+};
