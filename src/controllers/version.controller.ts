@@ -12,7 +12,7 @@ export const getVersions = async (
 ) => {
   try {
     const userId = req.auth!.userId;
-    const { fileId } = req.params;
+    const fileId = String(req.params.fileId);
 
     const allowed = await canView(
       userId,
@@ -59,7 +59,8 @@ export const downloadVersion = async (
   try {
     const userId = req.auth!.userId;
 
-    const { fileId, versionId } = req.params;
+    const fileId = String(req.params.fileId);
+    const versionId = String(req.params.versionId);
 
     const allowed = await canView(
       userId,
@@ -115,7 +116,8 @@ export const revertVersion = async (
   try {
     const userId = req.auth!.userId;
 
-    const { fileId, versionId } = req.params;
+    const fileId = String(req.params.fileId);
+    const versionId = String(req.params.versionId);
 
     const allowed = await canEdit(
       userId,

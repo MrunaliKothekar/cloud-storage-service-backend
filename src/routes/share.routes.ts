@@ -4,6 +4,8 @@ import {
   createShare,
   getShares,
   deleteShare,
+  getSharedWithMe,
+  getSharedByMe,
 } from "../controllers/share.controller.js";
 
 import { requireAuth } from "../middlewares/auth.middleware.js";
@@ -19,6 +21,8 @@ router.post(
   createShare
 );
 
+router.get("/shared-with-me", requireAuth, getSharedWithMe);
+router.get("/shared-by-me", requireAuth, getSharedByMe);
 router.get("/", requireAuth, getShares);
 
 router.delete("/:id", requireAuth, deleteShare);

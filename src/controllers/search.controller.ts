@@ -74,11 +74,24 @@ export const search = async (
             OR EXISTS (
               SELECT 1
               FROM shares s
-              JOIN folders sf
-                ON sf.id = s.resource_id
               WHERE s.resource_type = 'folder'
                 AND s.grantee_user_id = $1
-                AND f.folder_id = sf.id
+                AND EXISTS (
+                  WITH RECURSIVE ancestors AS (
+                    SELECT id, parent_id
+                    FROM folders
+                    WHERE id = f.folder_id
+                      AND is_deleted = false
+                    UNION ALL
+                    SELECT parent.id, parent.parent_id
+                    FROM folders parent
+                    INNER JOIN ancestors a ON parent.id = a.parent_id
+                    WHERE parent.is_deleted = false
+                  )
+                  SELECT 1
+                  FROM ancestors a
+                  WHERE a.id = s.resource_id
+                )
             )
           )
           AND f.name ILIKE '%' || $2 || '%'
@@ -114,8 +127,23 @@ export const search = async (
               SELECT 1
               FROM shares s
               WHERE s.resource_type = 'folder'
-                AND s.resource_id = f.id
                 AND s.grantee_user_id = $1
+                AND EXISTS (
+                  WITH RECURSIVE ancestors AS (
+                    SELECT id, parent_id
+                    FROM folders
+                    WHERE id = f.id
+                      AND is_deleted = false
+                    UNION ALL
+                    SELECT parent.id, parent.parent_id
+                    FROM folders parent
+                    INNER JOIN ancestors a ON parent.id = a.parent_id
+                    WHERE parent.is_deleted = false
+                  )
+                  SELECT 1
+                  FROM ancestors a
+                  WHERE a.id = s.resource_id
+                )
             )
           )
           AND f.name ILIKE '%' || $2 || '%'

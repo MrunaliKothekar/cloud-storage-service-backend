@@ -327,3 +327,148 @@ export const deleteShare = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getSharedWithMe = async (req: Request, res: Response) => {
+  try {
+    if (!req.auth) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const userId = req.auth.userId;
+
+    const result = await pool.query(
+      `
+      SELECT
+        s.id AS share_id,
+        s.resource_type,
+        s.resource_id,
+        s.role,
+        s.created_at AS shared_at,
+        u.name AS owner_name,
+        u.email AS owner_email,
+        f.name,
+        f.mime_type,
+        f.size_bytes,
+        f.folder_id,
+        f.updated_at
+      FROM shares s
+      INNER JOIN files f
+        ON s.resource_type = 'file'
+       AND s.resource_id = f.id
+      INNER JOIN users u ON u.id = f.owner_id
+      WHERE s.grantee_user_id = $1
+        AND f.is_deleted = false
+
+      UNION ALL
+
+      SELECT
+        s.id AS share_id,
+        s.resource_type,
+        s.resource_id,
+        s.role,
+        s.created_at AS shared_at,
+        u.name AS owner_name,
+        u.email AS owner_email,
+        d.name,
+        NULL AS mime_type,
+        NULL AS size_bytes,
+        d.parent_id AS folder_id,
+        d.updated_at
+      FROM shares s
+      INNER JOIN folders d
+        ON s.resource_type = 'folder'
+       AND s.resource_id = d.id
+      INNER JOIN users u ON u.id = d.owner_id
+      WHERE s.grantee_user_id = $1
+        AND d.is_deleted = false
+
+      ORDER BY shared_at DESC
+      `,
+      [userId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      shares: result.rows,
+    });
+  } catch (error) {
+    console.error("Get shared with me error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get shared resources",
+    });
+  }
+};
+
+export const getSharedByMe = async (req: Request, res: Response) => {
+  try {
+    if (!req.auth) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const userId = req.auth.userId;
+
+    const result = await pool.query(
+      `
+      SELECT
+        s.id AS share_id,
+        s.resource_type,
+        s.resource_id,
+        s.role,
+        s.created_at AS shared_at,
+        u.name AS shared_with_name,
+        u.email AS shared_with_email,
+        f.name,
+        f.mime_type,
+        f.size_bytes,
+        f.folder_id,
+        f.updated_at
+      FROM shares s
+      INNER JOIN files f
+        ON s.resource_type = 'file'
+       AND s.resource_id = f.id
+      INNER JOIN users u ON u.id = s.grantee_user_id
+      WHERE s.created_by = $1
+        AND f.is_deleted = false
+
+      UNION ALL
+
+      SELECT
+        s.id AS share_id,
+        s.resource_type,
+        s.resource_id,
+        s.role,
+        s.created_at AS shared_at,
+        u.name AS shared_with_name,
+        u.email AS shared_with_email,
+        d.name,
+        NULL AS mime_type,
+        NULL AS size_bytes,
+        d.parent_id AS folder_id,
+        d.updated_at
+      FROM shares s
+      INNER JOIN folders d
+        ON s.resource_type = 'folder'
+       AND s.resource_id = d.id
+      INNER JOIN users u ON u.id = s.grantee_user_id
+      WHERE s.created_by = $1
+        AND d.is_deleted = false
+
+      ORDER BY shared_at DESC
+      `,
+      [userId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      shares: result.rows,
+    });
+  } catch (error) {
+    console.error("Get shared by me error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get resources shared by you",
+    });
+  }
+};
+

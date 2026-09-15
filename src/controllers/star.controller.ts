@@ -98,10 +98,38 @@ export const getStars = async (
       SELECT
         s.resource_type,
         s.resource_id,
-        s.user_id
+        s.user_id,
+        f.name,
+        f.mime_type,
+        f.size_bytes,
+        f.folder_id,
+        f.updated_at
       FROM stars s
+      INNER JOIN files f
+        ON s.resource_type = 'file'
+       AND s.resource_id = f.id
       WHERE s.user_id = $1
-      ORDER BY s.resource_type, s.resource_id
+        AND f.is_deleted = false
+
+      UNION ALL
+
+      SELECT
+        s.resource_type,
+        s.resource_id,
+        s.user_id,
+        d.name,
+        NULL AS mime_type,
+        NULL AS size_bytes,
+        d.parent_id AS folder_id,
+        d.updated_at
+      FROM stars s
+      INNER JOIN folders d
+        ON s.resource_type = 'folder'
+       AND s.resource_id = d.id
+      WHERE s.user_id = $1
+        AND d.is_deleted = false
+
+      ORDER BY updated_at DESC NULLS LAST
       `,
       [req.auth.userId]
     );

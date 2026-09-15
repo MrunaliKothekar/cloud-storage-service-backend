@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createFolder,
+  getRootContents,
   getFolder,
   updateFolder,
   deleteFolder,
@@ -18,6 +19,7 @@ router.post(
   createFolder
 );
 
+router.get("/", requireAuth, getRootContents);
 router.get("/:id", requireAuth, getFolder);
 
 router.patch("/:id", requireAuth, updateFolder);

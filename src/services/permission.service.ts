@@ -61,7 +61,7 @@ export const getResourcePermission = async (
       [resourceId, userId]
     );
 
-    if (directShare.rowCount > 0) {
+    if ((directShare.rowCount ?? 0) > 0) {
       return directShare.rows[0].role;
     }
 
@@ -170,7 +170,7 @@ const getFolderPermission = async (
     [folderId, userId]
   );
 
-  if (shareResult.rowCount > 0) {
+  if ((shareResult.rowCount ?? 0) > 0) {
     return shareResult.rows[0].role;
   }
 

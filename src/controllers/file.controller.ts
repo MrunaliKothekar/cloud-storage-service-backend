@@ -14,6 +14,7 @@ import {
   canView,
   canEdit,
   canDelete,
+  getResourcePermission,
 } from "../services/permission.service.js";
 
 export const uploadFile = async (
@@ -156,78 +157,63 @@ export const uploadFile = async (
 export const updateFile = async (req: Request, res: Response) => {
   try {
     if (!req.auth) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated",
-      });
+      return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
     const userId = req.auth.userId;
-    const { id } = req.params;
+    const id = String(req.params.id);
     const { name, folderId } = req.body;
 
-    // Get current file
     const fileResult = await pool.query(
       `
       SELECT *
       FROM files
-      WHERE id = $1
-        AND owner_id = $2
-        AND is_deleted = false
+      WHERE id = $1 AND is_deleted = false
       `,
-      [id, userId]
+      [id]
     );
 
     if (fileResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "File not found",
-      });
+      return res.status(404).json({ success: false, message: "File not found" });
     }
 
     const currentFile = fileResult.rows[0];
+    const role = await getResourcePermission(userId, "file", id);
 
-    // Keep old values if not provided
-    const newName =
-      name !== undefined
-        ? String(name).trim()
-        : currentFile.name;
+    if (!role || !["owner", "editor"].includes(role)) {
+      return res.status(403).json({ success: false, message: "You do not have permission to edit this file" });
+    }
 
-    const newFolderId =
-      folderId !== undefined
-        ? folderId
-        : currentFile.folder_id;
+    const newName = name !== undefined ? String(name).trim() : currentFile.name;
+    const newFolderId = folderId !== undefined ? folderId : currentFile.folder_id;
+    const isOwner = currentFile.owner_id === userId;
 
-    // Validate name
     if (!newName || newName.length > 255) {
-      return res.status(400).json({
+      return res.status(400).json({ success: false, message: "File name must be between 1 and 255 characters" });
+    }
+
+    if (!isOwner && newFolderId !== currentFile.folder_id) {
+      return res.status(403).json({
         success: false,
-        message: "File name must be between 1 and 255 characters",
+        message: "Editors can rename shared files but cannot move them",
       });
     }
 
-    // Validate destination folder
     if (newFolderId !== null) {
       const folderResult = await pool.query(
         `
         SELECT id
         FROM folders
-        WHERE id = $1
-          AND owner_id = $2
-          AND is_deleted = false
+        WHERE id = $1 AND owner_id = $2 AND is_deleted = false
         `,
-        [newFolderId, userId]
+        [newFolderId, currentFile.owner_id]
       );
 
       if (folderResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Destination folder not found",
-        });
+        return res.status(404).json({ success: false, message: "Destination folder not found" });
       }
     }
 
-    // Check duplicate filename in destination folder
     const duplicateResult = await pool.query(
       `
       SELECT id
@@ -238,7 +224,7 @@ export const updateFile = async (req: Request, res: Response) => {
         AND id != $4
         AND is_deleted = false
       `,
-      [userId, newFolderId, newName, id]
+      [currentFile.owner_id, newFolderId, newName, id]
     );
 
     if (duplicateResult.rows.length > 0) {
@@ -248,47 +234,26 @@ export const updateFile = async (req: Request, res: Response) => {
       });
     }
 
-    // Update file
     const updatedResult = await pool.query(
       `
       UPDATE files
-      SET
-        name = $1,
-        folder_id = $2,
-        updated_at = NOW()
-      WHERE id = $3
-        AND owner_id = $4
-        AND is_deleted = false
+      SET name = $1, folder_id = $2, updated_at = NOW()
+      WHERE id = $3 AND is_deleted = false
       RETURNING *
       `,
-      [
-        newName,
-        newFolderId,
-        id,
-        userId,
-      ]
+      [newName, newFolderId, id]
     );
 
     const updatedFile = updatedResult.rows[0];
 
-    // Determine activity
-    let action = "rename";
-
-    if (newFolderId !== currentFile.folder_id) {
-      action = "move";
-    }
-
     await pool.query(
       `
-      INSERT INTO activities
-        (actor_id, action, resource_type, resource_id, context)
-      VALUES
-        ($1, $2, $3, $4, $5)
+      INSERT INTO activities (actor_id, action, resource_type, resource_id, context)
+      VALUES ($1, $2, 'file', $3, $4)
       `,
       [
         userId,
-        action,
-        "file",
+        newFolderId !== currentFile.folder_id ? "move" : "rename",
         id,
         JSON.stringify({
           oldName: currentFile.name,
@@ -299,19 +264,13 @@ export const updateFile = async (req: Request, res: Response) => {
       ]
     );
 
-    return res.status(200).json({
-      success: true,
-      file: updatedFile,
-    });
+    return res.status(200).json({ success: true, file: updatedFile });
   } catch (error) {
     console.error("Update file error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update file",
-    });
+    return res.status(500).json({ success: false, message: "Failed to update file" });
   }
 };
+
 
 export const deleteFile = async (req: Request, res: Response) => {
   try {
@@ -323,7 +282,7 @@ export const deleteFile = async (req: Request, res: Response) => {
     }
 
     const userId = req.auth.userId;
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const fileResult = await pool.query(
       `
@@ -401,7 +360,7 @@ export const downloadFile = async (req: Request, res: Response) => {
     }
 
     const userId = req.auth.userId;
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const result = await pool.query(
       `
@@ -410,13 +369,13 @@ export const downloadFile = async (req: Request, res: Response) => {
         name,
         mime_type,
         storage_key,
-        size_bytes
+        size_bytes,
+        owner_id
       FROM files
       WHERE id = $1
-        AND owner_id = $2
         AND is_deleted = false
       `,
-      [id, userId]
+      [id]
     );
 
     if (result.rows.length === 0) {
@@ -427,6 +386,14 @@ export const downloadFile = async (req: Request, res: Response) => {
     }
 
     const file = result.rows[0];
+
+    const allowed = await canView(userId, "file", id);
+    if (!allowed) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have access to this file",
+      });
+    }
 
     const signedUrl = await createSignedDownloadUrl(
       file.storage_key
@@ -467,6 +434,40 @@ export const downloadFile = async (req: Request, res: Response) => {
       success: false,
       message: "Failed to generate download URL",
     });
+  }
+};
+
+export const getFileStats = async (req: Request, res: Response) => {
+  try {
+    if (!req.auth) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const userId = req.auth.userId;
+    const [filesResult, foldersResult, storageResult] = await Promise.all([
+      pool.query(
+        `SELECT COUNT(*)::int AS count FROM files WHERE owner_id = $1 AND is_deleted = false`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS count FROM folders WHERE owner_id = $1 AND is_deleted = false`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(size_bytes), 0)::bigint AS bytes FROM files WHERE owner_id = $1 AND is_deleted = false`,
+        [userId]
+      ),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      files: Number(filesResult.rows[0]?.count || 0),
+      folders: Number(foldersResult.rows[0]?.count || 0),
+      storageBytes: Number(storageResult.rows[0]?.bytes || 0),
+    });
+  } catch (error) {
+    console.error("Get file stats error:", error);
+    return res.status(500).json({ success: false, message: "Failed to get file statistics" });
   }
 };
 

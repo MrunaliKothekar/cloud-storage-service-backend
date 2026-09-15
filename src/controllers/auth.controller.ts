@@ -273,7 +273,7 @@ export const googleCallback = async (
     );
 
     return res.redirect(
-      `${env.CORS_ORIGIN}/dashboard`
+      `${env.CORS_ORIGIN}/`
     );
   } catch (error) {
     console.error("Google callback error:", error);
